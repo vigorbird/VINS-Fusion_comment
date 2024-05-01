@@ -17,6 +17,8 @@
 class Utility
 {
   public:
+  	//非回环函数
+  	//输入的三维向量为 theta ，输出的增量四元数 =[1.0 , (theta/2).x, (theta/2).y, (theta/2).z ] 详见vins公式推导文档
     template <typename Derived>
     static Eigen::Quaternion<typename Derived::Scalar> deltaQ(const Eigen::MatrixBase<Derived> &theta)
     {
@@ -72,6 +74,7 @@ class Utility
         return ans;
     }
 
+	//非回环的R2ypr函数
     static Eigen::Vector3d R2ypr(const Eigen::Matrix3d &R)
     {
         Eigen::Vector3d n = R.col(0);

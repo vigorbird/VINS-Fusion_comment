@@ -60,10 +60,17 @@ public:
 	void savePoseGraph();
 	void loadPoseGraph();
 	void publish();
+
+	//因为vio自己有一个参考坐标系，而pose_graph求解出来的位姿图也有自己的坐标系，
+	//这两个坐标系有一个变换关系，写在了r_drift,t_drift里面。
+	//应该就是当前序列第一帧在回环世界坐标系下的位姿
+	//这个变换好像是回环帧世界坐标系移动到里程计世界坐标系的变化
+	//当前帧优化前后发生的位姿变化
 	Vector3d t_drift;
 	double yaw_drift;
 	Matrix3d r_drift;
 	// world frame( base sequence or first sequence)<----> cur sequence frame  
+	//w_t_vio,w_r_vio描述的就是当前序列的第一帧，与世界坐标系之间的转换关系。
 	Vector3d w_t_vio;
 	Matrix3d w_r_vio;
 
@@ -74,16 +81,16 @@ private:
 	void optimize4DoF();
 	void optimize6DoF();
 	void updatePath();
-	list<KeyFrame*> keyframelist;
+	list<KeyFrame*> keyframelist;//回环线程接收到的所有关键帧
 	std::mutex m_keyframelist;
 	std::mutex m_optimize_buf;
 	std::mutex m_path;
 	std::mutex m_drift;
 	std::thread t_optimization;
-	std::queue<int> optimize_buf;
+	std::queue<int> optimize_buf;//存储的是检测到回环帧的当前帧的id
 
 	int global_index;
-	int sequence_cnt;
+	int sequence_cnt;//一共发生了多少次回环,初始值是0
 	vector<bool> sequence_loop;
 	map<int, cv::Mat> image_pool;
 	int earliest_loop_index;
@@ -108,8 +115,10 @@ void QuaternionInverse(const T q[4], T q_inverse[4])
 	q_inverse[3] = -q[3];
 };
 
+//保证角度在-180度到180度之间
 template <typename T>
-T NormalizeAngle(const T& angle_degrees) {
+T NormalizeAngle(const T& angle_degrees) 
+{
   if (angle_degrees > T(180.0))
   	return angle_degrees - T(360.0);
   else if (angle_degrees < T(-180.0))
@@ -122,17 +131,18 @@ class AngleLocalParameterization {
  public:
 
   template <typename T>
-  bool operator()(const T* theta_radians, const T* delta_theta_radians,
-                  T* theta_radians_plus_delta) const {
-    *theta_radians_plus_delta =
-        NormalizeAngle(*theta_radians + *delta_theta_radians);
+  bool operator()(const T* theta_radians, const T* delta_theta_radians,T* theta_radians_plus_delta) const 
+  {
+    *theta_radians_plus_delta = NormalizeAngle(*theta_radians + *delta_theta_radians);//保证角度在-180度到180度之间
 
     return true;
   }
 
-  static ceres::LocalParameterization* Create() {
-    return (new ceres::AutoDiffLocalParameterization<AngleLocalParameterization,
-                                                     1, 1>);
+  static ceres::LocalParameterization* Create() 
+  {
+    //第一个1是global size
+    //第二个1是loacal size
+    return (new ceres::AutoDiffLocalParameterization<AngleLocalParameterization,1, 1>);
   }
 };
 
@@ -212,9 +222,8 @@ struct FourDOFError
 	static ceres::CostFunction* Create(const double t_x, const double t_y, const double t_z,
 									   const double relative_yaw, const double pitch_i, const double roll_i) 
 	{
-	  return (new ceres::AutoDiffCostFunction<
-	          FourDOFError, 4, 1, 3, 1, 3>(
-	          	new FourDOFError(t_x, t_y, t_z, relative_yaw, pitch_i, roll_i)));
+	  //4表示残差的维度 后面的1 3 1 3 表示的是参数的维度
+	  return (new ceres::AutoDiffCostFunction<FourDOFError, 4, 1, 3, 1, 3>(new FourDOFError(t_x, t_y, t_z, relative_yaw, pitch_i, roll_i)));
 	}
 
 	double t_x, t_y, t_z;

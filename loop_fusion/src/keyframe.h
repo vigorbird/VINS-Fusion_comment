@@ -85,31 +85,33 @@ public:
 
 
 
-	double time_stamp; 
-	int index;
+	double time_stamp; //这个关键帧的时间戳
+	int index;//里程
 	int local_index;
 	Eigen::Vector3d vio_T_w_i; 
 	Eigen::Matrix3d vio_R_w_i; 
-	Eigen::Vector3d T_w_i;
+	
+	Eigen::Vector3d T_w_i;//第一帧坐标系下的位姿
 	Eigen::Matrix3d R_w_i;
-	Eigen::Vector3d origin_vio_T;		
+	
+	Eigen::Vector3d origin_vio_T;//里程计发送来的载体在世界坐标下的位姿		
 	Eigen::Matrix3d origin_vio_R;
 	cv::Mat image;
 	cv::Mat thumbnail;
-	vector<cv::Point3f> point_3d; 
-	vector<cv::Point2f> point_2d_uv;
-	vector<cv::Point2f> point_2d_norm;
+	vector<cv::Point3f> point_3d; //里程计发送来的特征点在里程计线程中在世界坐标系
+	vector<cv::Point2f> point_2d_uv;//里程计发送来的在原始图像的坐标
+	vector<cv::Point2f> point_2d_norm;//里程计发送来的归一化坐标
 	vector<double> point_id;
-	vector<cv::KeyPoint> keypoints;
-	vector<cv::KeyPoint> keypoints_norm;
+	vector<cv::KeyPoint> keypoints;//根据fast提取得到的特征点的原始像素坐标
+	vector<cv::KeyPoint> keypoints_norm;//根据fast提取得到的特征点的归一化坐标
 	vector<cv::KeyPoint> window_keypoints;
 	vector<BRIEF::bitset> brief_descriptors;
 	vector<BRIEF::bitset> window_brief_descriptors;
 	bool has_fast_point;
-	int sequence;
+	int sequence;//关键帧所属的序列
 
 	bool has_loop;
-	int loop_index;
-	Eigen::Matrix<double, 8, 1 > loop_info;
+	int loop_index;//回环帧的id
+	Eigen::Matrix<double, 8, 1 > loop_info;//存储的信息是当前帧和pnp计算得到的闭环帧的相对位姿 顺序是位置 四元数 和yaw角度的相对变化
 };
 

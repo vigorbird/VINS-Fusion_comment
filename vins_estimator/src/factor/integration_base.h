@@ -44,6 +44,7 @@ class IntegrationBase
         propagate(dt, acc, gyr);
     }
 
+	//repropagateº¯Êý
     void repropagate(const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
     {
         sum_dt = 0.0;

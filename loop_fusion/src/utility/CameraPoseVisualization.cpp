@@ -81,6 +81,7 @@ void CameraPoseVisualization::add_edge(const Eigen::Vector3d& p0, const Eigen::V
     m_markers.push_back(marker);
 }
 
+//回环add_loopedge函数
 void CameraPoseVisualization::add_loopedge(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1){
     //m_markers.clear();
     visualization_msgs::Marker marker;
@@ -111,7 +112,8 @@ void CameraPoseVisualization::add_loopedge(const Eigen::Vector3d& p0, const Eige
     m_markers.push_back(marker);
 }
 
-
+//add_pose回环函数 主要是为了显示
+//输入的的是add_pose回环世界坐标系到相机坐标系下的位姿变化        
 void CameraPoseVisualization::add_pose(const Eigen::Vector3d& p, const Eigen::Quaterniond& q) {
     visualization_msgs::Marker marker;
 
@@ -198,12 +200,14 @@ void CameraPoseVisualization::add_pose(const Eigen::Vector3d& p, const Eigen::Qu
     m_markers.push_back(marker);
 }
 
+//回环reset函数
 void CameraPoseVisualization::reset() {
 	m_markers.clear();
     //image.points.clear();
     //image.colors.clear();
 }
 
+//回环publish_by函数
 void CameraPoseVisualization::publish_by( ros::Publisher &pub, const std_msgs::Header &header ) {
 	visualization_msgs::MarkerArray markerArray_msg;
 	//int k = (int)m_markers.size();

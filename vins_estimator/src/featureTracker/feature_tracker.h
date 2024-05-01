@@ -68,10 +68,10 @@ public:
     vector<cv::Point2f> predict_pts;
     vector<cv::Point2f> predict_pts_debug;
     vector<cv::Point2f> prev_pts, cur_pts, cur_right_pts;
-    vector<cv::Point2f> prev_un_pts, cur_un_pts, cur_un_right_pts;
+    vector<cv::Point2f> prev_un_pts, cur_un_pts, cur_un_right_pts;//归一化平面的做标点
     vector<cv::Point2f> pts_velocity, right_pts_velocity;
-    vector<int> ids, ids_right;
-    vector<int> track_cnt;
+    vector<int> ids, ids_right;//当前帧的世界特征点的序号
+    vector<int> track_cnt;//内容是当前帧的角点被追踪的次数
     map<int, cv::Point2f> cur_un_pts_map, prev_un_pts_map;
     map<int, cv::Point2f> cur_un_right_pts_map, prev_un_right_pts_map;
     map<int, cv::Point2f> prevLeftPtsMap;
@@ -79,6 +79,6 @@ public:
     double cur_time;
     double prev_time;
     bool stereo_cam;
-    int n_id;
+    int n_id;//这个变量只有声明feature track类时会被赋值0， 即初始化时赋值为0，总的特征点个数
     bool hasPrediction;
 };

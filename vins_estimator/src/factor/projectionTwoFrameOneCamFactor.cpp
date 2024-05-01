@@ -14,6 +14,7 @@
 Eigen::Matrix2d ProjectionTwoFrameOneCamFactor::sqrt_info;
 double ProjectionTwoFrameOneCamFactor::sum_t;
 
+//输入的变量依次为 i帧的像素坐标，j帧的像素坐标，i帧下的像素速度，j帧下的像素速度，i帧下的延迟，j帧下的延迟
 ProjectionTwoFrameOneCamFactor::ProjectionTwoFrameOneCamFactor(const Eigen::Vector3d &_pts_i, const Eigen::Vector3d &_pts_j, 
                                        const Eigen::Vector2d &_velocity_i, const Eigen::Vector2d &_velocity_j,
                                        const double _td_i, const double _td_j) : 
@@ -27,6 +28,7 @@ ProjectionTwoFrameOneCamFactor::ProjectionTwoFrameOneCamFactor(const Eigen::Vect
     velocity_j.y() = _velocity_j.y();
     velocity_j.z() = 0;
 
+//默认不进入条件
 #ifdef UNIT_SPHERE_ERROR
     Eigen::Vector3d b1, b2;
     Eigen::Vector3d a = pts_j.normalized();
@@ -40,6 +42,8 @@ ProjectionTwoFrameOneCamFactor::ProjectionTwoFrameOneCamFactor(const Eigen::Vect
 #endif
 };
 
+//待优化的参数依次为: i帧的位姿，j帧的位姿，imu到左相机的外参，特征点在滑动起始窗的逆深度，延时
+//将i时刻的相机坐标系下的点变换到j时刻相机坐标系下，并与j时刻的观测值相减
 bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
 {
     TicToc tic_toc;
@@ -54,26 +58,26 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
 
     double inv_dep_i = parameters[3][0];
 
-    double td = parameters[4][0];
+    double td = parameters[4][0];//默认为0
 
     Eigen::Vector3d pts_i_td, pts_j_td;
-    pts_i_td = pts_i - (td - td_i) * velocity_i;
-    pts_j_td = pts_j - (td - td_j) * velocity_j;
-    Eigen::Vector3d pts_camera_i = pts_i_td / inv_dep_i;
-    Eigen::Vector3d pts_imu_i = qic * pts_camera_i + tic;
-    Eigen::Vector3d pts_w = Qi * pts_imu_i + Pi;
-    Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);
-    Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
+    pts_i_td = pts_i - (td - td_i) * velocity_i;//i帧的像素坐标
+    pts_j_td = pts_j - (td - td_j) * velocity_j;//j帧的像素坐标
+    Eigen::Vector3d pts_camera_i = pts_i_td / inv_dep_i;//i帧相机坐标系下的坐标
+    Eigen::Vector3d pts_imu_i = qic * pts_camera_i + tic;//将点变换到i帧imu坐标系下的坐标
+    Eigen::Vector3d pts_w = Qi * pts_imu_i + Pi;//根据i帧的世界坐标，得到这个特征点在世界坐标系下的坐标
+    Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);//得到j时刻坐标系下的坐标
+    Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);//得到j时刻坐标系下的相机坐标
     Eigen::Map<Eigen::Vector2d> residual(residuals);
 
-#ifdef UNIT_SPHERE_ERROR 
+#ifdef UNIT_SPHERE_ERROR //默认不进入这个条件
     residual =  tangent_base * (pts_camera_j.normalized() - pts_j_td.normalized());
 #else
     double dep_j = pts_camera_j.z();
-    residual = (pts_camera_j / dep_j).head<2>() - pts_j_td.head<2>();
+    residual = (pts_camera_j / dep_j).head<2>() - pts_j_td.head<2>();//通过i帧得到的j帧的像素坐标与j帧的观测值相减
 #endif
 
-    residual = sqrt_info * residual;
+    residual = sqrt_info * residual;// sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity(); 为什么???????????????
 
     if (jacobians)
     {
@@ -93,12 +97,12 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
                      - x1 * x3 / pow(norm, 3),            - x2 * x3 / pow(norm, 3),            1.0 / norm - x3 * x3 / pow(norm, 3);
         reduce = tangent_base * norm_jaco;
 #else
-        reduce << 1. / dep_j, 0, -pts_camera_j(0) / (dep_j * dep_j),
-            0, 1. / dep_j, -pts_camera_j(1) / (dep_j * dep_j);
+        reduce << 1. / dep_j, 0, -pts_camera_j(0) / (dep_j * dep_j), 
+        		   0, 1. / dep_j, -pts_camera_j(1) / (dep_j * dep_j);
 #endif
         reduce = sqrt_info * reduce;
 
-        if (jacobians[0])
+        if (jacobians[0])//i帧的位姿雅克比 有效
         {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_pose_i(jacobians[0]);
 
@@ -110,7 +114,7 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
             jacobian_pose_i.rightCols<1>().setZero();
         }
 
-        if (jacobians[1])
+        if (jacobians[1])//j帧的位姿雅克比 有效
         {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_pose_j(jacobians[1]);
 
@@ -121,7 +125,7 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
             jacobian_pose_j.leftCols<6>() = reduce * jaco_j;
             jacobian_pose_j.rightCols<1>().setZero();
         }
-        if (jacobians[2])
+        if (jacobians[2])//imu到相机的外参雅克比
         {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_ex_pose(jacobians[2]);
             Eigen::Matrix<double, 3, 6> jaco_ex;
@@ -132,16 +136,15 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
             jacobian_ex_pose.leftCols<6>() = reduce * jaco_ex;
             jacobian_ex_pose.rightCols<1>().setZero();
         }
-        if (jacobians[3])
+        if (jacobians[3])//特征点在滑动起始窗的逆深度雅克比 有效
         {
             Eigen::Map<Eigen::Vector2d> jacobian_feature(jacobians[3]);
             jacobian_feature = reduce * ric.transpose() * Rj.transpose() * Ri * ric * pts_i_td * -1.0 / (inv_dep_i * inv_dep_i);
         }
-        if (jacobians[4])
+        if (jacobians[4])//延时的雅克比
         {
             Eigen::Map<Eigen::Vector2d> jacobian_td(jacobians[4]);
-            jacobian_td = reduce * ric.transpose() * Rj.transpose() * Ri * ric * velocity_i / inv_dep_i * -1.0  +
-                          sqrt_info * velocity_j.head(2);
+            jacobian_td = reduce * ric.transpose() * Rj.transpose() * Ri * ric * velocity_i / inv_dep_i * -1.0  +  sqrt_info * velocity_j.head(2);
         }
     }
     sum_t += tic_toc.toc();
@@ -149,7 +152,9 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
     return true;
 }
 
+//这个函数没有用到
 void ProjectionTwoFrameOneCamFactor::check(double **parameters)
+
 {
     double *res = new double[2];
     double **jaco = new double *[5];

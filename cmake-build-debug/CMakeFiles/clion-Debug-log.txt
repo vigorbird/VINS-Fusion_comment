@@ -1,0 +1,1 @@
+"E:\CLion 2023.1.1\bin\cmake\win\x64\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_MAKE_PROGRAM=E:/CLion 2023.1.1/bin/ninja/win/x64/ninja.exe" -G Ninja -S D:\文章代码和技术\code\VINS_FUSION\VINS-Fusion-master -B D:\文章代码和技术\code\VINS_FUSION\VINS-Fusion-master\cmake-build-debug

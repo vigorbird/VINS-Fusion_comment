@@ -104,7 +104,7 @@ void CameraPoseVisualization::add_loopedge(const Eigen::Vector3d& p0, const Eige
     m_markers.push_back(marker);
 }
 
-
+//add_poseº¯Êý
 void CameraPoseVisualization::add_pose(const Eigen::Vector3d& p, const Eigen::Quaterniond& q) {
     visualization_msgs::Marker marker;
 

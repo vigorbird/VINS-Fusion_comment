@@ -446,6 +446,7 @@ PinholeCamera::liftSphere(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
  * \param p image coordinates
  * \param P coordinates of the projective ray
  */
+ //K.inverse()*[u,v,1]T 针孔模型liftProjective函数
 void
 PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
 {
@@ -491,7 +492,7 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
             // Recursive distortion model
             int n = 8;
             Eigen::Vector2d d_u;
-            distortion(Eigen::Vector2d(mx_d, my_d), d_u);
+            distortion(Eigen::Vector2d(mx_d, my_d), d_u);//比较重要的distortion函数
             // Approximate value
             mx_u = mx_d - d_u(0);
             my_u = my_d - d_u(1);

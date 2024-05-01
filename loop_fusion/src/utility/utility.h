@@ -42,6 +42,7 @@ class Utility
         return ans;
     }
 
+	//
     template <typename Derived>
     static Eigen::Quaternion<typename Derived::Scalar> positify(const Eigen::QuaternionBase<Derived> &q)
     {
@@ -136,14 +137,14 @@ class Utility
         f(iter);
     }
 
+	//回环的normalizeAngle函数 输入的是度 将输入的角度变化到-180 到180之间
     template <typename T>
-    static T normalizeAngle(const T& angle_degrees) {
+    static T normalizeAngle(const T& angle_degrees)
+    {
       T two_pi(2.0 * 180);
       if (angle_degrees > 0)
-      return angle_degrees -
-          two_pi * std::floor((angle_degrees + T(180)) / two_pi);
+      return angle_degrees - two_pi * std::floor( (angle_degrees + T(180)) / two_pi );
       else
-        return angle_degrees +
-            two_pi * std::floor((-angle_degrees + T(180)) / two_pi);
+        return angle_degrees + two_pi * std::floor((-angle_degrees + T(180)) / two_pi);
     };
 };

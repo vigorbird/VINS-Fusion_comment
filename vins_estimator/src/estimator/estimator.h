@@ -95,9 +95,13 @@ class Estimator
     std::mutex mProcess;
     std::mutex mBuf;
     std::mutex mPropagate;
-    queue<pair<double, Eigen::Vector3d>> accBuf;
-    queue<pair<double, Eigen::Vector3d>> gyrBuf;
-    queue<pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > > featureBuf;
+	//queue的特点是先进先出
+    queue<pair<double, Eigen::Vector3d>> accBuf;//时间戳和加速度
+    queue<pair<double, Eigen::Vector3d>> gyrBuf;//时间戳和角速度
+    queue<pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > > featureBuf;//double 是左右图像的时间戳， 
+																								//第一个int 表示特征点的ID		
+																								//第二个int 表示左相机还是右相机																						
+																								//Eigen::Matrix<double, 7, 1> 表示当前帧的归一化平面坐标，图像原始坐标，和相对于上帧图像的像素速度
     double prevTime, curTime;
     bool openExEstimation;
 
@@ -110,16 +114,17 @@ class Estimator
     MarginalizationFlag  marginalization_flag;
     Vector3d g;
 
-    Matrix3d ric[2];
-    Vector3d tic[2];
+    Matrix3d ric[2];//imu坐标系移动到相机坐标系的姿态变化-固定值
+    Vector3d tic[2];//imu坐标系移动到相机坐标系的位置变化-固定值
 
-    Vector3d        Ps[(WINDOW_SIZE + 1)];
-    Vector3d        Vs[(WINDOW_SIZE + 1)];
-    Matrix3d        Rs[(WINDOW_SIZE + 1)];
-    Vector3d        Bas[(WINDOW_SIZE + 1)];
-    Vector3d        Bgs[(WINDOW_SIZE + 1)];
-    double td;
+    Vector3d        Ps[(WINDOW_SIZE + 1)];//imu的位置 世界坐标系移动到imu坐标系发生的变化
+    Vector3d        Vs[(WINDOW_SIZE + 1)];//imu的速度
+    Matrix3d        Rs[(WINDOW_SIZE + 1)];//imu的姿态
+    Vector3d        Bas[(WINDOW_SIZE + 1)];//加速度bias
+    Vector3d        Bgs[(WINDOW_SIZE + 1)];//陀螺仪的bias
+    double td;//默认值是0
 
+	//back_R0 和back_P0 是要删除的滑动窗的位姿
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
     double Headers[(WINDOW_SIZE + 1)];
@@ -131,7 +136,7 @@ class Estimator
     vector<Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)];
     vector<Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];
 
-    int frame_count;
+    int frame_count;//好像只有初始化时使用了，最大值就是10，应该是滑动窗中的帧数
     int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
     int inputImageCnt;
 
@@ -145,24 +150,24 @@ class Estimator
 
     vector<Vector3d> point_cloud;
     vector<Vector3d> margin_cloud;
-    vector<Vector3d> key_poses;
+    vector<Vector3d> key_poses;//关键帧的位置
     double initial_timestamp;
 
 
-    double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
-    double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
-    double para_Feature[NUM_OF_F][SIZE_FEATURE];
-    double para_Ex_Pose[2][SIZE_POSE];
+    double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];//存储着窗口中不同时刻的姿态，SIZE_POSE=7=位置t+四元数
+    double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];//存储着窗口中各个相机帧的速度和bias，SIZE_SPEEDBIAS=9
+    double para_Feature[NUM_OF_F][SIZE_FEATURE];//NUM_OF_F=1000，SIZE_FEATURE=1，存储的是观测次数超过4次特征点的逆深度
+    double para_Ex_Pose[2][SIZE_POSE];//相机到imu的外参变化
     double para_Retrive_Pose[SIZE_POSE];
-    double para_Td[1][1];
+    double para_Td[1][1];//默认里面存储的全部是0
     double para_Tr[1][1];
 
     int loop_window_index;
 
-    MarginalizationInfo *last_marginalization_info;
-    vector<double *> last_marginalization_parameter_blocks;
+    MarginalizationInfo *last_marginalization_info;//上一次边缘化之后保留下的cost function和参与优化参数的信息
+    vector<double *> last_marginalization_parameter_blocks;//上一次边缘化后保留下的参数的地址
 
-    map<double, ImageFrame> all_image_frame;
+    map<double, ImageFrame> all_image_frame;//滑动窗中的帧的信息
     IntegrationBase *tmp_pre_integration;
 
     Eigen::Vector3d initP;

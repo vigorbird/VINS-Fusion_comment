@@ -20,10 +20,10 @@
 
 using namespace std;
 
-const double FOCAL_LENGTH = 460.0;
-const int WINDOW_SIZE = 10;
+const double FOCAL_LENGTH = 460.0;//好像不是从配置文件中读取的，好像就是作者这里设置的
+const int WINDOW_SIZE = 10;//滑动窗口的大小
 const int NUM_OF_F = 1000;
-//#define UNIT_SPHERE_ERROR
+//#define UNIT_SPHERE_ERROR//用于控制误差类型
 
 extern double INIT_DEPTH;
 extern double MIN_PARALLAX;

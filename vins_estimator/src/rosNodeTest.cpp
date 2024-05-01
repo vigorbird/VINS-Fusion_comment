@@ -25,7 +25,7 @@ Estimator estimator;
 
 queue<sensor_msgs::ImuConstPtr> imu_buf;
 queue<sensor_msgs::PointCloudConstPtr> feature_buf;
-queue<sensor_msgs::ImageConstPtr> img0_buf;
+queue<sensor_msgs::ImageConstPtr> img0_buf;//queue特性是先进先出
 queue<sensor_msgs::ImageConstPtr> img1_buf;
 std::mutex m_buf;
 
@@ -78,7 +78,7 @@ void sync_process()
             std_msgs::Header header;
             double time = 0;
             m_buf.lock();
-            if (!img0_buf.empty() && !img1_buf.empty())
+            if (!img0_buf.empty() && !img1_buf.empty())//左右相机都有图像
             {
                 double time0 = img0_buf.front()->header.stamp.toSec();
                 double time1 = img1_buf.front()->header.stamp.toSec();
@@ -93,7 +93,7 @@ void sync_process()
                     img1_buf.pop();
                     printf("throw img1\n");
                 }
-                else
+                else//左右相机在允许的时间范围内，认为是在一个时间拍摄的
                 {
                     time = img0_buf.front()->header.stamp.toSec();
                     header = img0_buf.front()->header;
@@ -106,8 +106,9 @@ void sync_process()
             }
             m_buf.unlock();
             if(!image0.empty())
-                estimator.inputImage(time, image0, image1);
+                estimator.inputImage(time, image0, image1);//超级重要的函数!!!!!!!!!!!!!!!!
         }
+		/*注释和双目不相关的代码方便阅读
         else
         {
             cv::Mat image;
@@ -124,10 +125,10 @@ void sync_process()
             m_buf.unlock();
             if(!image.empty())
                 estimator.inputImage(time, image);
-        }
+        }*/
 
         std::chrono::milliseconds dura(2);
-        std::this_thread::sleep_for(dura);
+        std::this_thread::sleep_for(dura);//线程休眠2ms
     }
 }
 
@@ -147,7 +148,7 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     return;
 }
 
-
+//经过实测发现从没有进入这个回调函数
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
@@ -221,6 +222,8 @@ void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
     return;
 }
 
+//双目加IMU的运行命令 
+//rosrun vins vins_node ~/catkin_ws/src/VINS-Fusion/config/euroc/euroc_stereo_imu_config.yaml 
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "vins_estimator");
@@ -238,8 +241,8 @@ int main(int argc, char **argv)
     string config_file = argv[1];
     printf("config_file: %s\n", argv[1]);
 
-    readParameters(config_file);
-    estimator.setParameter();
+    readParameters(config_file);//读取配置文件
+    estimator.setParameter();//非常重要的函数!!!!!!!!!!!!!!!开启了一个线程
 
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
@@ -247,23 +250,16 @@ int main(int argc, char **argv)
 
     ROS_WARN("waiting for image and imu...");
 
-    registerPub(n);
+    registerPub(n);//声明一些ros publish的topic
 
-    ros::Subscriber sub_imu;
-    if(USE_IMU)
-    {
-        sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
-    }
-    ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
-    ros::Subscriber sub_img0 = n.subscribe(IMAGE0_TOPIC, 100, img0_callback);
-    ros::Subscriber sub_img1;
-    if(STEREO)
-    {
-        sub_img1 = n.subscribe(IMAGE1_TOPIC, 100, img1_callback);
-    }
+    ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());//比较重要的回调函数
+    ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 2000, feature_callback);//这个回调函数没用
+    ros::Subscriber sub_img0 = n.subscribe(IMAGE0_TOPIC, 100, img0_callback);//注意了订阅的是mynteye的原始图像topic!!!!!!!
+    ros::Subscriber sub_img1 = n.subscribe(IMAGE1_TOPIC, 100, img1_callback);
+	//下面的topic一直没有被使用
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
-    ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
-    ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
+    ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);//告诉系统使用不使用imu
+    ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);//告诉系统使用的是单目还是双目
 
     std::thread sync_thread{sync_process};
     ros::spin();

@@ -9,8 +9,8 @@
 
 #include "parameters.h"
 
-double INIT_DEPTH;
-double MIN_PARALLAX;
+double INIT_DEPTH;//默认值是5
+double MIN_PARALLAX;//默认设置10
 double ACC_N, ACC_W;
 double GYR_N, GYR_W;
 
@@ -21,8 +21,8 @@ Eigen::Vector3d G{0.0, 0.0, 9.8};
 
 double BIAS_ACC_THRESHOLD;
 double BIAS_GYR_THRESHOLD;
-double SOLVER_TIME;
-int NUM_ITERATIONS;
+double SOLVER_TIME;//euroc和小觅的默认值是0.04 ms
+int NUM_ITERATIONS;//euroc和小觅的默认值是8
 int ESTIMATE_EXTRINSIC;
 int ESTIMATE_TD;
 int ROLLING_SHUTTER;
@@ -41,7 +41,7 @@ std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
 std::string FISHEYE_MASK;
 std::vector<std::string> CAM_NAMES;
 int MAX_CNT;
-int MIN_DIST;
+int MIN_DIST;//默认150
 double F_THRESHOLD;
 int SHOW_TRACK;
 int FLOW_BACK;

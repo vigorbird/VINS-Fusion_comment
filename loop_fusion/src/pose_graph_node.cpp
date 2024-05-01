@@ -35,14 +35,15 @@
 #define SKIP_FIRST_CNT 10
 using namespace std;
 
-queue<sensor_msgs::ImageConstPtr> image_buf;
-queue<sensor_msgs::PointCloudConstPtr> point_buf;
-queue<nav_msgs::Odometry::ConstPtr> pose_buf;
+//queue特性是先进先出
+queue<sensor_msgs::ImageConstPtr> image_buf;//存储里程计创来的图像，在image_callback函数中更新
+queue<sensor_msgs::PointCloudConstPtr> point_buf;//滑动窗口的特征点在世界坐标系下的坐标，顺序是归一化的平面坐标，原始坐标和在世界坐标系下的ID
+queue<nav_msgs::Odometry::ConstPtr> pose_buf;//对应keyframe_pose topic发送来的消息，内容是滑动窗口倒数第二个帧的位姿
 queue<Eigen::Vector3d> odometry_buf;
 std::mutex m_buf;
 std::mutex m_process;
-int frame_index  = 0;
-int sequence = 1;
+int frame_index  = 0;//每收到一个图像这个变量都会加1
+int sequence = 1;//只有图像不连续时才会对这个变量+1
 PoseGraph posegraph;
 int skip_first_cnt = 0;
 int SKIP_CNT;
@@ -58,14 +59,14 @@ int COL;
 int DEBUG_IMAGE;
 
 camodocal::CameraPtr m_camera;
-Eigen::Vector3d tic;
+Eigen::Vector3d tic;//从里程计节点传来的外参
 Eigen::Matrix3d qic;
 ros::Publisher pub_match_img;
 ros::Publisher pub_camera_pose_visual;
 ros::Publisher pub_odometry_rect;
 
 std::string BRIEF_PATTERN_FILE;
-std::string POSE_GRAPH_SAVE_PATH;
+std::string POSE_GRAPH_SAVE_PATH;//
 std::string VINS_RESULT_PATH;
 CameraPoseVisualization cameraposevisual(1, 0, 0, 1);
 Eigen::Vector3d last_t(-100, -100, -100);
@@ -76,7 +77,7 @@ ros::Publisher pub_point_cloud, pub_margin_cloud;
 void new_sequence()
 {
     printf("new sequence\n");
-    sequence++;
+    sequence++;//整个代码里就这对sequence进行了更新
     printf("sequence cnt %d \n", sequence);
     if (sequence > 5)
     {
@@ -107,8 +108,8 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msg)
 
     // detect unstable camera stream
     if (last_image_time == -1)
-        last_image_time = image_msg->header.stamp.toSec();
-    else if (image_msg->header.stamp.toSec() - last_image_time > 1.0 || image_msg->header.stamp.toSec() < last_image_time)
+        last_image_time = image_msg->header.stamp.toSec();//整个代码对last_image_time更新就是在这个函数中
+    else if (image_msg->header.stamp.toSec() - last_image_time > 1.0 || image_msg->header.stamp.toSec() < last_image_time)//如果图像不连续那么认为新的序列开始了
     {
         ROS_WARN("image discontinue! detect a new sequence!");
         new_sequence();
@@ -116,6 +117,7 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msg)
     last_image_time = image_msg->header.stamp.toSec();
 }
 
+//接收到的topic内容是目前滑动窗口的特征点在世界坐标系下的坐标，顺序是归一化的平面坐标，原始坐标和在世界坐标系下的ID
 void point_callback(const sensor_msgs::PointCloudConstPtr &point_msg)
 {
     //ROS_INFO("point_callback!");
@@ -141,7 +143,7 @@ void point_callback(const sensor_msgs::PointCloudConstPtr &point_msg)
         p_3d.x = point_msg->points[i].x;
         p_3d.y = point_msg->points[i].y;
         p_3d.z = point_msg->points[i].z;
-        Eigen::Vector3d tmp = posegraph.r_drift * Eigen::Vector3d(p_3d.x, p_3d.y, p_3d.z) + posegraph.t_drift;
+        Eigen::Vector3d tmp = posegraph.r_drift * Eigen::Vector3d(p_3d.x, p_3d.y, p_3d.z) + posegraph.t_drift;//变换到回环的世界坐标系下进行显示
         geometry_msgs::Point32 p;
         p.x = tmp(0);
         p.y = tmp(1);
@@ -152,6 +154,7 @@ void point_callback(const sensor_msgs::PointCloudConstPtr &point_msg)
 }
 
 // only for visualization
+//这个topic仅仅是为了显示
 void margin_point_callback(const sensor_msgs::PointCloudConstPtr &point_msg)
 {
     sensor_msgs::PointCloud point_cloud;
@@ -189,6 +192,9 @@ void pose_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     */
 }
 
+//回环vio_callback函数
+//接收到的消息是滑动窗最新帧的位姿和线速度
+//好像没有对什么状态进行更新，都是为了显示
 void vio_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
 {
     //ROS_INFO("vio_callback!");
@@ -200,9 +206,9 @@ void vio_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     vio_q.z() = pose_msg->pose.pose.orientation.z;
 
     vio_t = posegraph.w_r_vio * vio_t + posegraph.w_t_vio;
-    vio_q = posegraph.w_r_vio *  vio_q;
+    vio_q = posegraph.w_r_vio *  vio_q;//在当前序列的第一帧下的坐标系
 
-    vio_t = posegraph.r_drift * vio_t + posegraph.t_drift;
+    vio_t = posegraph.r_drift * vio_t + posegraph.t_drift;//变换到回环世界坐标系下
     vio_q = posegraph.r_drift * vio_q;
 
     nav_msgs::Odometry odometry;
@@ -220,10 +226,10 @@ void vio_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     Vector3d vio_t_cam;
     Quaterniond vio_q_cam;
     vio_t_cam = vio_t + vio_q * tic;
-    vio_q_cam = vio_q * qic;        
+    vio_q_cam = vio_q * qic;//回环世界坐标系到相机坐标系下的位姿变化        
 
     cameraposevisual.reset();
-    cameraposevisual.add_pose(vio_t_cam, vio_q_cam);
+    cameraposevisual.add_pose(vio_t_cam, vio_q_cam);//主要是为了显示
     cameraposevisual.publish_by(pub_camera_pose_visual, pose_msg->header);
 
 
@@ -252,13 +258,15 @@ void process()
 
         // find out the messages with same time stamp
         m_buf.lock();
-        if(!image_buf.empty() && !point_buf.empty() && !pose_buf.empty())
-        {
+        if(!image_buf.empty() && !point_buf.empty() && !pose_buf.empty())//保证点云和图像起始时间戳要大于位姿
+        {   
+     		//如果图像的时间戳 大于 位姿的时间戳 则删除位姿队列最前面的元素
             if (image_buf.front()->header.stamp.toSec() > pose_buf.front()->header.stamp.toSec())
             {
                 pose_buf.pop();
                 printf("throw pose at beginning\n");
             }
+			//如果图像的时间戳 大于 点云的时间戳 则删除点云队列最前面的元素
             else if (image_buf.front()->header.stamp.toSec() > point_buf.front()->header.stamp.toSec())
             {
                 point_buf.pop();
@@ -267,18 +275,18 @@ void process()
             else if (image_buf.back()->header.stamp.toSec() >= pose_buf.front()->header.stamp.toSec() 
                 && point_buf.back()->header.stamp.toSec() >= pose_buf.front()->header.stamp.toSec())
             {
-                pose_msg = pose_buf.front();
+                pose_msg = pose_buf.front();//得到队列中位姿的信息
                 pose_buf.pop();
                 while (!pose_buf.empty())
                     pose_buf.pop();
                 while (image_buf.front()->header.stamp.toSec() < pose_msg->header.stamp.toSec())
                     image_buf.pop();
-                image_msg = image_buf.front();
+                image_msg = image_buf.front();//得到队列中图像的信息
                 image_buf.pop();
 
                 while (point_buf.front()->header.stamp.toSec() < pose_msg->header.stamp.toSec())
                     point_buf.pop();
-                point_msg = point_buf.front();
+                point_msg = point_buf.front();//得到队列中特征点的信息
                 point_buf.pop();
             }
         }
@@ -290,13 +298,13 @@ void process()
             //printf(" point time %f \n", point_msg->header.stamp.toSec());
             //printf(" image time %f \n", image_msg->header.stamp.toSec());
             // skip fisrt few
-            if (skip_first_cnt < SKIP_FIRST_CNT)
+            if (skip_first_cnt < SKIP_FIRST_CNT)//SKIP_FIRST_CNT = 10 当滑动窗的关键帧大于等于10时才进行后面的处理
             {
                 skip_first_cnt++;
                 continue;
             }
 
-            if (skip_cnt < SKIP_CNT)
+            if (skip_cnt < SKIP_CNT)//SKIP_CNT = 0 好像默认永远都不会进入这个条件
             {
                 skip_cnt++;
                 continue;
@@ -307,6 +315,7 @@ void process()
             }
 
             cv_bridge::CvImageConstPtr ptr;
+			//将图像转换为opencv格式
             if (image_msg->encoding == "8UC1")
             {
                 sensor_msgs::Image img;
@@ -324,6 +333,7 @@ void process()
             
             cv::Mat image = ptr->image;
             // build keyframe
+            //此处的T和R是里程计世界坐标系下的载体位姿
             Vector3d T = Vector3d(pose_msg->pose.pose.position.x,
                                   pose_msg->pose.pose.position.y,
                                   pose_msg->pose.pose.position.z);
@@ -331,16 +341,16 @@ void process()
                                      pose_msg->pose.pose.orientation.x,
                                      pose_msg->pose.pose.orientation.y,
                                      pose_msg->pose.pose.orientation.z).toRotationMatrix();
-            if((T - last_t).norm() > SKIP_DIS)
+            if((T - last_t).norm() > SKIP_DIS)//默认 SKIP_DIS = 0
             {
-                vector<cv::Point3f> point_3d; 
-                vector<cv::Point2f> point_2d_uv; 
-                vector<cv::Point2f> point_2d_normal;
+                vector<cv::Point3f> point_3d; //特征点在里程计线程中的世界坐标
+                vector<cv::Point2f> point_2d_uv; //特征点的原始图像坐标
+                vector<cv::Point2f> point_2d_normal;//特征点的归一化坐标
                 vector<double> point_id;
-
+                //遍历里程的点云数据
                 for (unsigned int i = 0; i < point_msg->points.size(); i++)
                 {
-                    cv::Point3f p_3d;
+                    cv::Point3f p_3d;//特征点在里程计线程中的世界坐标
                     p_3d.x = point_msg->points[i].x;
                     p_3d.y = point_msg->points[i].y;
                     p_3d.z = point_msg->points[i].z;
@@ -348,25 +358,27 @@ void process()
 
                     cv::Point2f p_2d_uv, p_2d_normal;
                     double p_id;
-                    p_2d_normal.x = point_msg->channels[i].values[0];
+                    p_2d_normal.x = point_msg->channels[i].values[0];//特征点的归一化坐标
                     p_2d_normal.y = point_msg->channels[i].values[1];
-                    p_2d_uv.x = point_msg->channels[i].values[2];
+                    p_2d_uv.x = point_msg->channels[i].values[2];//特征点的原始图像坐标
                     p_2d_uv.y = point_msg->channels[i].values[3];
-                    p_id = point_msg->channels[i].values[4];
+                    p_id = point_msg->channels[i].values[4];//特征点在里程计线程中的id
                     point_2d_normal.push_back(p_2d_normal);
                     point_2d_uv.push_back(p_2d_uv);
                     point_id.push_back(p_id);
 
                     //printf("u %f, v %f \n", p_2d_uv.x, p_2d_uv.y);
                 }
-
+                //除了赋值操作之外还进行了如下操作
+                //构造 提取像素点的biref描述子的对象
+				//使用fast提取图像的特征点，再得到矫正之后的图像像素坐标
                 KeyFrame* keyframe = new KeyFrame(pose_msg->header.stamp.toSec(), frame_index, T, R, image,
-                                   point_3d, point_2d_uv, point_2d_normal, point_id, sequence);   
+                                   			     point_3d, point_2d_uv, point_2d_normal, point_id, sequence);   
                 m_process.lock();
                 start_flag = 1;
-                posegraph.addKeyFrame(keyframe, 1);
+                posegraph.addKeyFrame(keyframe, 1);//就是使用了dbow2库的内容查询是否发生了回环，如果发生了回环，则将分数最小的那帧的id返回
                 m_process.unlock();
-                frame_index++;
+                frame_index++;//整个代码就这里更新了frame_index
                 last_t = T;
             }
         }
@@ -397,11 +409,13 @@ void command()
     }
 }
 
+
+//rosrun loop_fusion loop_fusion_node ~/catkin_ws/src/VINS-Fusion/config/euroc/euroc_stereo_imu_config.yaml 
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "loop_fusion");
     ros::NodeHandle n("~");
-    posegraph.registerPub(n);
+    posegraph.registerPub(n);//准备发布的topic
     
     VISUALIZATION_SHIFT_X = 0;
     VISUALIZATION_SHIFT_Y = 0;
@@ -434,11 +448,11 @@ int main(int argc, char **argv)
     ROW = fsSettings["image_height"];
     COL = fsSettings["image_width"];
     std::string pkg_path = ros::package::getPath("loop_fusion");
-    string vocabulary_file = pkg_path + "/../support_files/brief_k10L6.bin";
+    string vocabulary_file = pkg_path + "/../support_files/brief_k10L6.bin";//词典文件
     cout << "vocabulary_file" << vocabulary_file << endl;
-    posegraph.loadVocabulary(vocabulary_file);
+    posegraph.loadVocabulary(vocabulary_file);//加载词典!!!!!!!!!!!!!!!!!!!!
 
-    BRIEF_PATTERN_FILE = pkg_path + "/../support_files/brief_pattern.yml";
+    BRIEF_PATTERN_FILE = pkg_path + "/../support_files/brief_pattern.yml";//非常重要 ，后面会用到，bief特征点描述子的提取方法 !!!!
     cout << "BRIEF_PATTERN_FILE" << BRIEF_PATTERN_FILE << endl;
 
     int pn = config_file.find_last_of('/');
@@ -460,10 +474,10 @@ int main(int argc, char **argv)
     fout.close();
 
     int USE_IMU = fsSettings["imu"];
-    posegraph.setIMUFlag(USE_IMU);
-    fsSettings.release();
+    posegraph.setIMUFlag(USE_IMU);//非常重要的函数!!!!!!!!!!!，开启了optimize4DoF线程
+    fsSettings.release();//opencv函数
 
-    if (LOAD_PREVIOUS_POSE_GRAPH)
+    if (LOAD_PREVIOUS_POSE_GRAPH)//默认是0，不进入这个条件
     {
         printf("load pose graph\n");
         m_process.lock();
@@ -478,12 +492,16 @@ int main(int argc, char **argv)
         load_flag = 1;
     }
 
-    ros::Subscriber sub_vio = n.subscribe("/vins_estimator/odometry", 2000, vio_callback);
-    ros::Subscriber sub_image = n.subscribe(IMAGE_TOPIC, 2000, image_callback);
+	//这两个回调函数仅仅为了显示
+    ros::Subscriber sub_vio = n.subscribe("/vins_estimator/odometry", 2000, vio_callback);//好像没有对什么状态进行更新，都是为了显示
+    ros::Subscriber sub_margin_point = n.subscribe("/vins_estimator/margin_cloud", 2000, margin_point_callback);//这个topic仅仅是为了显示
+
+	//这下面四个回调函数对状态进行了更新
+    ros::Subscriber sub_image = n.subscribe(IMAGE_TOPIC, 2000, image_callback);//主要是完成图像的更新
     ros::Subscriber sub_pose = n.subscribe("/vins_estimator/keyframe_pose", 2000, pose_callback);
     ros::Subscriber sub_extrinsic = n.subscribe("/vins_estimator/extrinsic", 2000, extrinsic_callback);
-    ros::Subscriber sub_point = n.subscribe("/vins_estimator/keyframe_point", 2000, point_callback);
-    ros::Subscriber sub_margin_point = n.subscribe("/vins_estimator/margin_cloud", 2000, margin_point_callback);
+    ros::Subscriber sub_point = n.subscribe("/vins_estimator/keyframe_point", 2000, point_callback);//将里程计世界坐标系下的点变换到闭环世界坐标系下进行显示
+    
 
     pub_match_img = n.advertise<sensor_msgs::Image>("match_image", 1000);
     pub_camera_pose_visual = n.advertise<visualization_msgs::MarkerArray>("camera_pose_visual", 1000);
@@ -494,7 +512,7 @@ int main(int argc, char **argv)
     std::thread measurement_process;
     std::thread keyboard_command_process;
 
-    measurement_process = std::thread(process);
+    measurement_process = std::thread(process);//最为主要的线程!!!!!!!!!!!!!!
     keyboard_command_process = std::thread(command);
     
     ros::spin();

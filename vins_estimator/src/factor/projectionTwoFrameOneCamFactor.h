@@ -31,6 +31,6 @@ class ProjectionTwoFrameOneCamFactor : public ceres::SizedCostFunction<2, 7, 7, 
     Eigen::Vector3d velocity_i, velocity_j;
     double td_i, td_j;
     Eigen::Matrix<double, 2, 3> tangent_base;
-    static Eigen::Matrix2d sqrt_info;
+    static Eigen::Matrix2d sqrt_info;//µÈÓÚ  = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     static double sum_t;
 };

@@ -85,7 +85,7 @@ void printStatistics(const Estimator &estimator, double t)
     //printf("position: %f, %f, %f\r", estimator.Ps[WINDOW_SIZE].x(), estimator.Ps[WINDOW_SIZE].y(), estimator.Ps[WINDOW_SIZE].z());
     ROS_DEBUG_STREAM("position: " << estimator.Ps[WINDOW_SIZE].transpose());
     ROS_DEBUG_STREAM("orientation: " << estimator.Vs[WINDOW_SIZE].transpose());
-    if (ESTIMATE_EXTRINSIC)
+    if (ESTIMATE_EXTRINSIC)//对外参进行估计，euroc和mynteye都将这个参数设置为0
     {
         cv::FileStorage fs(EX_CALIB_RESULT_PATH, cv::FileStorage::WRITE);
         for (int i = 0; i < NUM_OF_CAM; i++)
@@ -123,7 +123,7 @@ void printStatistics(const Estimator &estimator, double t)
 
 void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
 {
-    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
+    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)//表示系统已经初始化完成
     {
         nav_msgs::Odometry odometry;
         odometry.header = header;
@@ -141,7 +141,7 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         odometry.twist.twist.linear.x = estimator.Vs[WINDOW_SIZE].x();
         odometry.twist.twist.linear.y = estimator.Vs[WINDOW_SIZE].y();
         odometry.twist.twist.linear.z = estimator.Vs[WINDOW_SIZE].z();
-        pub_odometry.publish(odometry);
+        pub_odometry.publish(odometry);//topic name = odometry//回环线程用到的topic
 
         geometry_msgs::PoseStamped pose_stamped;
         pose_stamped.header = header;
@@ -150,7 +150,7 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         path.header = header;
         path.header.frame_id = "world";
         path.poses.push_back(pose_stamped);
-        pub_path.publish(path);
+        pub_path.publish(path);//topic name = path
 
         // write result to file
         ofstream foutC(VINS_RESULT_PATH, ios::app);
@@ -206,17 +206,17 @@ void pubKeyPoses(const Estimator &estimator, const std_msgs::Header &header)
         pose_marker.z = correct_pose.z();
         key_poses.points.push_back(pose_marker);
     }
-    pub_key_poses.publish(key_poses);
+    pub_key_poses.publish(key_poses);//topic name = key_poses
 }
 
 void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
 {
     int idx2 = WINDOW_SIZE - 1;
 
-    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
+    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)//初始化完毕
     {
         int i = idx2;
-        Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];
+        Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];//计算得到w坐标系移动左相机坐标系下的位置变化
         Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[0]);
 
         nav_msgs::Odometry odometry;
@@ -230,17 +230,17 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header)
         odometry.pose.pose.orientation.z = R.z();
         odometry.pose.pose.orientation.w = R.w();
 
-        pub_camera_pose.publish(odometry);
+        pub_camera_pose.publish(odometry);//topic name = camera_pose
 
         cameraposevisual.reset();
-        cameraposevisual.add_pose(P, R);
+        cameraposevisual.add_pose(P, R);//搜索add_pose函数
         if(STEREO)
         {
             Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[1];
             Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[1]);
-            cameraposevisual.add_pose(P, R);
+            cameraposevisual.add_pose(P, R);//搜索add_pose函数
         }
-        cameraposevisual.publish_by(pub_camera_pose_visual, odometry.header);
+        cameraposevisual.publish_by(pub_camera_pose_visual, odometry.header);//topic name = camera_pose_visual
     }
 }
 
@@ -261,7 +261,7 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
         if (it_per_id.start_frame > WINDOW_SIZE * 3.0 / 4.0 || it_per_id.solve_flag != 1)
             continue;
         int imu_i = it_per_id.start_frame;
-        Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
+        Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;//相机坐标系下的点
         Vector3d w_pts_i = estimator.Rs[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0]) + estimator.Ps[imu_i];
 
         geometry_msgs::Point32 p;
@@ -270,7 +270,7 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
         p.z = w_pts_i(2);
         point_cloud.points.push_back(p);
     }
-    pub_point_cloud.publish(point_cloud);
+    pub_point_cloud.publish(point_cloud);//topic name = point_cloud
 
 
     // pub margined potin
@@ -281,11 +281,12 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
     { 
         int used_num;
         used_num = it_per_id.feature_per_frame.size();
-        if (!(used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+        if (!(used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))//如果是个刚刚看到的新的地图点不将其publish出去
             continue;
         //if (it_per_id->start_frame > WINDOW_SIZE * 3.0 / 4.0 || it_per_id->solve_flag != 1)
         //        continue;
 
+		//如果滑动起始帧是第一帧且被观测到的次数小于2
         if (it_per_id.start_frame == 0 && it_per_id.feature_per_frame.size() <= 2 
             && it_per_id.solve_flag == 1 )
         {
@@ -300,7 +301,7 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
             margin_cloud.points.push_back(p);
         }
     }
-    pub_margin_cloud.publish(margin_cloud);
+    pub_margin_cloud.publish(margin_cloud);//topci name = margin_cloud 闭环线程用到的topic
 }
 
 
@@ -350,16 +351,16 @@ void pubTF(const Estimator &estimator, const std_msgs::Header &header)
     odometry.pose.pose.orientation.y = tmp_q.y();
     odometry.pose.pose.orientation.z = tmp_q.z();
     odometry.pose.pose.orientation.w = tmp_q.w();
-    pub_extrinsic.publish(odometry);
+    pub_extrinsic.publish(odometry);//topic name = extrinsic 回环线程用到的topic
 
 }
 
 void pubKeyframe(const Estimator &estimator)
 {
     // pub camera pose, 2D-3D points of keyframe
-    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR && estimator.marginalization_flag == 0)
+    if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR && estimator.marginalization_flag == 0)//0==MARGIN_OLD，表示删除的是最旧的帧
     {
-        int i = WINDOW_SIZE - 2;
+        int i = WINDOW_SIZE - 2;//这里显示的是倒数第二个的结果滑动窗口的位姿结果
         //Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];
         Vector3d P = estimator.Ps[i];
         Quaterniond R = Quaterniond(estimator.Rs[i]);
@@ -376,7 +377,7 @@ void pubKeyframe(const Estimator &estimator)
         odometry.pose.pose.orientation.w = R.w();
         //printf("time: %f t: %f %f %f r: %f %f %f %f\n", odometry.header.stamp.toSec(), P.x(), P.y(), P.z(), R.w(), R.x(), R.y(), R.z());
 
-        pub_keyframe_pose.publish(odometry);
+        pub_keyframe_pose.publish(odometry);//topic name = keyframe_pos 回环线程使用
 
 
         sensor_msgs::PointCloud point_cloud;
@@ -385,13 +386,13 @@ void pubKeyframe(const Estimator &estimator)
         for (auto &it_per_id : estimator.f_manager.feature)
         {
             int frame_size = it_per_id.feature_per_frame.size();
+			//对显示的特征点进行筛选
             if(it_per_id.start_frame < WINDOW_SIZE - 2 && it_per_id.start_frame + frame_size - 1 >= WINDOW_SIZE - 2 && it_per_id.solve_flag == 1)
             {
 
                 int imu_i = it_per_id.start_frame;
                 Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
-                Vector3d w_pts_i = estimator.Rs[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0])
-                                      + estimator.Ps[imu_i];
+                Vector3d w_pts_i = estimator.Rs[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0]) + estimator.Ps[imu_i];//获得点在世界坐标系下的坐标
                 geometry_msgs::Point32 p;
                 p.x = w_pts_i(0);
                 p.y = w_pts_i(1);
@@ -400,15 +401,15 @@ void pubKeyframe(const Estimator &estimator)
 
                 int imu_j = WINDOW_SIZE - 2 - it_per_id.start_frame;
                 sensor_msgs::ChannelFloat32 p_2d;
-                p_2d.values.push_back(it_per_id.feature_per_frame[imu_j].point.x());
+                p_2d.values.push_back(it_per_id.feature_per_frame[imu_j].point.x());//归一化坐标
                 p_2d.values.push_back(it_per_id.feature_per_frame[imu_j].point.y());
-                p_2d.values.push_back(it_per_id.feature_per_frame[imu_j].uv.x());
+                p_2d.values.push_back(it_per_id.feature_per_frame[imu_j].uv.x());//原始坐标
                 p_2d.values.push_back(it_per_id.feature_per_frame[imu_j].uv.y());
-                p_2d.values.push_back(it_per_id.feature_id);
+                p_2d.values.push_back(it_per_id.feature_id);//在世界坐标系下的ID
                 point_cloud.channels.push_back(p_2d);
             }
 
         }
-        pub_keyframe_point.publish(point_cloud);
+        pub_keyframe_point.publish(point_cloud);//topic name = keyframe_point 回环线程用到的topic
     }
 }

@@ -21,6 +21,7 @@
 using namespace Eigen;
 using namespace std;
 
+//存储着一帧的所有信息，包括位姿 特征点
 class ImageFrame
 {
     public:

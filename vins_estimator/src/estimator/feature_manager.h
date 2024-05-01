@@ -25,6 +25,7 @@ using namespace Eigen;
 #include "parameters.h"
 #include "../utility/tic_toc.h"
 
+//存储的是一个特征点被关键帧观测到的数据
 class FeaturePerFrame
 {
   public:
@@ -52,18 +53,19 @@ class FeaturePerFrame
         is_stereo = true;
     }
     double cur_td;
-    Vector3d point, pointRight;
-    Vector2d uv, uvRight;
+    Vector3d point, pointRight;//应该是归一化坐标系下的点
+    Vector2d uv, uvRight;//应该是图像坐标
     Vector2d velocity, velocityRight;
-    bool is_stereo;
+    bool is_stereo;//是否左右两个相机都看到了这个特征点
 };
 
+//存储某个特征点的信息
 class FeaturePerId
 {
   public:
     const int feature_id;
-    int start_frame;
-    vector<FeaturePerFrame> feature_per_frame;
+    int start_frame;//在滑动窗口重从哪一帧开始被看到
+    vector<FeaturePerFrame> feature_per_frame;//被哪些帧看到
     int used_num;
     double estimated_depth;
     int solve_flag; // 0 haven't solve yet; 1 solve succ; 2 solve fail;
@@ -74,7 +76,7 @@ class FeaturePerId
     {
     }
 
-    int endFrame();
+    int endFrame();//在滑动窗中最后一个观测到这个点的序号
 };
 
 class FeatureManager
@@ -102,11 +104,11 @@ class FeatureManager
     void removeBack();
     void removeFront(int frame_count);
     void removeOutlier(set<int> &outlierIndex);
-    list<FeaturePerId> feature;
-    int last_track_num;
-    double last_average_parallax;
+    list<FeaturePerId> feature;//滑动窗口中的所有特征点。链表. 与 vectors相比, 它允许快速的插入和删除，但是随机访问却比较慢.
+    int last_track_num;//当前帧和地图点匹配的个数
+    double last_average_parallax;//这个变量没用
     int new_feature_num;
-    int long_track_num;
+    int long_track_num;//当前帧与window匹配的特征点观测数量超过4个的个数??
 
   private:
     double compensatedParallax2(const FeaturePerId &it_per_id, int frame_count);
